@@ -1,16 +1,15 @@
 #ifndef QUERY_CONDITION_H
 #define QUERY_CONDITION_H
-/*
 #include <string>
 #include <functional>
 #include <utility>
 #include <memory>
 #include <stack>
 #include <sstream>
-
+#include <typeinfo>
 #include "column.h"
 #include "cells.h"
-
+#include "table_condition.h"
 
 class QueryCondition;
 enum class CompareOperator {
@@ -49,9 +48,9 @@ std::unordered_map<std::string, int> priority = {
         {"<", 1},
         {">=", 1},
         {"<=", 1},
-        {"NOT", 2},
-        {"AND", 3},
-        { "OR", 4},
+        {"not", 2},
+        {"and", 3},
+        { "or", 4},
         {"(", 5},
         {")", 5}
 };
@@ -64,9 +63,9 @@ std::unordered_map<std::string, CompareOperator> compare_str_to_enum = {
         {"<=", CompareOperator::LESS_EQUAL}
 };
 std::unordered_map<std::string, LogicalOperator> logical_str_to_enum = {
-        {"AND", LogicalOperator::AND},
-        {"OR", LogicalOperator::OR},
-        {"NOT", LogicalOperator::NOT}
+        {"and", LogicalOperator::AND},
+        {"or", LogicalOperator::OR},
+        {"not", LogicalOperator::NOT}
 };
 std::unordered_map<std::string, MathOperator> math_str_to_enum = {
         {"+", MathOperator::PLUS},
@@ -88,22 +87,22 @@ bool isMathOperator(const std::string &token) {
 class QueryCondition {
 public:
     std::string column_name; //если сейчас в condition название колонки
-    Value value; //если сейчас в condition значение
+    std::string value;
     LogicalOperator logical_op = LogicalOperator::DEFAULT; //если сейчас в condition логический оператор
-    CompareOperator op = CompareOperator::DEFAULT; //если сейчас в condition оператор сравнения
+    CompareOperator compare_op = CompareOperator::DEFAULT; //если сейчас в condition оператор сравнения
     MathOperator math_op = MathOperator::DEFAULT; //если сейчас в condition математический оператор
     std::shared_ptr<QueryCondition> left = nullptr; //если сейчас в condition левая часть
     std::shared_ptr<QueryCondition> right = nullptr; //если сейчас в condition правая часть
 
     QueryCondition() = default;
     explicit QueryCondition(LogicalOperator logical_op) : logical_op(logical_op) {};
-    explicit QueryCondition(CompareOperator op) : op(op) {};
+    explicit QueryCondition(CompareOperator op) : compare_op(op) {};
     explicit QueryCondition(MathOperator math_op) : math_op(math_op) {};
-    QueryCondition(const std::string& val, const std::string& position) {
-        if (position == "left") {
+    QueryCondition(const std::string& val, const Table* str_owner) {
+        if(str_owner -> columns[val]) {
             column_name = val;
-        } else if (position == "right") {
-            value = Value(val);
+        } else {
+            value = val;
         }
     }
 };
@@ -147,7 +146,7 @@ std::stack<std::string> get_polish_notation(const std::string &condition_str) {
     return polish_notation;
 }
 
-std::shared_ptr<QueryCondition> build_condition_tree(std::stack<std::string> &cur, const std::string &which_side = "") {
+std::shared_ptr<QueryCondition> build_condition_tree(std::stack<std::string> &cur, const Table* str_owner) {
     if (cur.empty()) {
         return nullptr;
     }
@@ -156,26 +155,27 @@ std::shared_ptr<QueryCondition> build_condition_tree(std::stack<std::string> &cu
     std::shared_ptr<QueryCondition> node;
     if (isLogicalOperator(token)) {
         node = std::make_shared<QueryCondition>(logical_str_to_enum[token]);
-        node->left = build_condition_tree(cur, "left");
-        node->right = build_condition_tree(cur, "right");
+        node->left = build_condition_tree(cur, str_owner);
+        node->right = build_condition_tree(cur, str_owner);
     } else if (isCompareOperator(token)) {
         node = std::make_shared<QueryCondition>(compare_str_to_enum[token]);
-        node->left = build_condition_tree(cur, "left");
-        node->right = build_condition_tree(cur, "right");
+        node->left = build_condition_tree(cur, str_owner);
+        node->right = build_condition_tree(cur, str_owner);
     } else if (isMathOperator(token)) {
         node = std::make_shared<QueryCondition>(math_str_to_enum[token]);
-        node->left = build_condition_tree(cur, "left");
-        node->right = build_condition_tree(cur, "right");
+        node->left = build_condition_tree(cur, str_owner);
+        node->right = build_condition_tree(cur, str_owner);
     } else {
-        node = std::make_shared<QueryCondition>(token, which_side);
+        node = std::make_shared<QueryCondition>(token, str_owner);
     }
     return node;
 }
 
-std::shared_ptr<QueryCondition> get_condition_tree(const std::string &str) {
+std::shared_ptr<QueryCondition> get_condition_tree(const std::string &str, const Table* str_owner) {
     std::stack<std::string> polish_notation = get_polish_notation(str);
-    return build_condition_tree(polish_notation);
+    return build_condition_tree(polish_notation, str_owner);
 }
 
-*/
+
+
 #endif // QUERY_CONDITION_H
